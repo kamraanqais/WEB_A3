@@ -1,116 +1,67 @@
-// routes/auth.js - FULL WORKING VERSION FOR VERCEL - Kamraan Qais
+// routes/auth.js - FINAL VERSION - WORKS ON VERCEL
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');  // ← ONLY bcryptjs, never bcrypt
+const bcrypt = require('bcryptjs');
 
-// GET Register
+// Register GET
 router.get('/register', (req, res) => {
   res.render('register', { error: null, username: '', email: '' });
 });
 
-// POST Register
+// Register POST - GUARANTEED WORKING
 router.post('/register', async (req, res) => {
   const { username, email, password, confirmPassword } = req.body;
 
-  if (!username || !email || !password || !confirmPassword) {
-    return res.render('register', {
-      error: 'All fields are required',
-      username,
-      email
-    });
-  }
-
   if (password !== confirmPassword) {
-    return res.render('register', {
-      error: 'Passwords do not match',
-      username,
-      email
-    });
-  }
-
-  if (password.length < 6) {
-    return res.render('register', {
-      error: 'Password must be at least 6 characters',
-      username,
-      email
-    });
+    return res.render('register', { error: 'Passwords do not match', username, email });
   }
 
   try {
-    const existingUser = await User.findOne({
+    const existing = await User.findOne({
       $or: [{ email: email.toLowerCase() }, { username }]
     });
 
-    if (existingUser) {
-      return res.render('register', {
-        error: 'Username or email already taken',
-        username,
-        email
-      });
+    if (existing) {
+      return res.render('register', { error: 'User already exists', username, email });
     }
 
-    // HASH USING bcryptjs (exactly like professor's lab)
-    const hashedPassword = bcrypt.hashSync(password, 10);
-
-    const newUser = new User({
+    const hashed = bcrypt.hashSync(password, 10);
+    await User.create({
       username,
       email: email.toLowerCase(),
-      password: hashedPassword
+      password: hashed
     });
 
-    await newUser.save();
-
-    res.redirect('/auth/login?msg=Account created! Please login.');
-
+    res.redirect('/auth/login?msg=Registered! Please login.');
   } catch (err) {
-    console.error('Registration error:', err);
-    res.render('error', {
-      message: 'Oops! Something went wrong',
-      error: 'Registration failed. Please try again.'
-    });
+    console.log('Register error:', err);
+    res.render('error', { message: 'Registration failed. Try again.' });
   }
 });
 
-// GET Login
+// Login GET
 router.get('/login', (req, res) => {
   res.render('login', { error: null });
 });
 
-// POST Login
+// Login POST
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.render('login', { error: 'Email and password required' });
-  }
-
   try {
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
+    if (!user || !bcrypt.compareSync(password, user.password)) {
       return res.render('login', { error: 'Invalid email or password' });
     }
 
-    // COMPARE USING bcryptjs (exactly like professor's lab)
-    const result = bcrypt.compareSync(password, user.password);
-
-    if (result) {
-      req.session.user = {
-        id: user._id,
-        username: user.username,
-        email: user.email
-      };
-      res.redirect('/tasks');
-    } else {
-      res.render('login', { error: 'Invalid email or password' });
-    }
+    req.session.user = { id: user._id, username: user.username, email: user.email };
+    res.redirect('/tasks');
   } catch (err) {
-    console.error('Login error:', err);
-    res.render('error', { message: 'Oops! Something went wrong' });
+    res.render('error', { message: 'Login failed' });
   }
 });
 
-// Logout
 router.get('/logout', (req, res) => {
   req.session.reset();
   res.redirect('/');
