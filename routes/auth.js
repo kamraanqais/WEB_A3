@@ -1,94 +1,119 @@
+// routes/auth.js - FULL WORKING VERSION FOR VERCEL - Kamraan Qais
 const express = require('express');
-const { body, validationResult } = require('express-validator');
-const User = require('../models/User');
 const router = express.Router();
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');  // ← ONLY bcryptjs, never bcrypt
 
-// Login GET
-router.get('/login', (req, res) => {
-    res.render('login', { 
-        title: 'Login', 
-        user: req.session.user || null, 
-        error: null 
-    });
-});
-
-// Login POST
-router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-
-    try {
-        const user = await User.findOne({ email: email.toLowerCase() });
-        if (!user || !(await user.comparePassword(password))) {
-            return res.render('login', { 
-                title: 'Login', 
-                user: req.session.user || null, 
-                error: 'Invalid email or password' 
-            });
-        }
-
-        req.session.user = {
-            id: user._id.toString(),
-            username: user.username,
-            email: user.email
-        };
-
-        res.redirect('/dashboard');
-    } catch (err) {
-        console.error(err);
-        res.render('login', { 
-            title: 'Login', 
-            user: req.session.user || null, 
-            error: 'Login failed. Try again.' 
-        });
-    }
-});
-
-// Register GET
+// GET Register
 router.get('/register', (req, res) => {
-    res.render('register', { 
-        title: 'Register', 
-        user: req.session.user || null, 
-        errors: [], 
-        userData: {} 
-    });
+  res.render('register', { error: null, username: '', email: '' });
 });
 
-// Register POST
+// POST Register
 router.post('/register', async (req, res) => {
   const { username, email, password, confirmPassword } = req.body;
 
-  if (!username || !email || !password) {
-    return res.render('register', { error: 'All fields are required', username, email });
+  if (!username || !email || !password || !confirmPassword) {
+    return res.render('register', {
+      error: 'All fields are required',
+      username,
+      email
+    });
   }
+
   if (password !== confirmPassword) {
-    return res.render('register', { error: 'Passwords do not match', username, email });
+    return res.render('register', {
+      error: 'Passwords do not match',
+      username,
+      email
+    });
   }
+
   if (password.length < 6) {
-    return res.render('register', { error: 'Password must be at least 6 characters', username, email });
+    return res.render('register', {
+      error: 'Password must be at least 6 characters',
+      username,
+      email
+    });
   }
 
   try {
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username }]
+    });
+
     if (existingUser) {
-      return res.render('register', { error: 'User already exists', username, email });
+      return res.render('register', {
+        error: 'Username or email already taken',
+        username,
+        email
+      });
     }
 
-    const hashedPassword = await require('bcryptjs').hash(password, 10);
+    // HASH USING bcryptjs (exactly like professor's lab)
+    const hashedPassword = bcrypt.hashSync(password, 10);
 
-    const newUser = new User({ username, email, password: hashedPassword });
+    const newUser = new User({
+      username,
+      email: email.toLowerCase(),
+      password: hashedPassword
+    });
+
     await newUser.save();
 
-    res.redirect('/auth/login?success=Registered successfully! Please login.');
+    res.redirect('/auth/login?msg=Account created! Please login.');
+
   } catch (err) {
-    console.error('Register error:', err);
-    res.render('register', { error: 'Registration failed. Try again.', username, email });
+    console.error('Registration error:', err);
+    res.render('error', {
+      message: 'Oops! Something went wrong',
+      error: 'Registration failed. Please try again.'
+    });
+  }
+});
+
+// GET Login
+router.get('/login', (req, res) => {
+  res.render('login', { error: null });
+});
+
+// POST Login
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.render('login', { error: 'Email and password required' });
+  }
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.render('login', { error: 'Invalid email or password' });
+    }
+
+    // COMPARE USING bcryptjs (exactly like professor's lab)
+    const result = bcrypt.compareSync(password, user.password);
+
+    if (result) {
+      req.session.user = {
+        id: user._id,
+        username: user.username,
+        email: user.email
+      };
+      res.redirect('/tasks');
+    } else {
+      res.render('login', { error: 'Invalid email or password' });
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    res.render('error', { message: 'Oops! Something went wrong' });
   }
 });
 
 // Logout
 router.get('/logout', (req, res) => {
-    req.session.destroy();
-    res.redirect('/auth/login');
+  req.session.reset();
+  res.redirect('/');
 });
 
 module.exports = router;
