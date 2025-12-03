@@ -1,4 +1,4 @@
-
+// models/task.js — FINAL FIXED VERSION
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -13,7 +13,10 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     description: DataTypes.TEXT,
-    dueDate: DataTypes.DATEONLY,
+    dueDate: {  // ← FIXED: Use STRING to avoid date parsing crashes
+      type: DataTypes.STRING,  // Store as 'YYYY-MM-DD' string
+      allowNull: true
+    },
     status: {
       type: DataTypes.ENUM('pending', 'completed'),
       defaultValue: 'pending'
@@ -27,6 +30,5 @@ module.exports = (sequelize) => {
     timestamps: true
   });
 
-  
   return Task;
 };

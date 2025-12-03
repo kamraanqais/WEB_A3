@@ -1,6 +1,17 @@
+// routes/auth.js — FIXED FOR SERVERLESS
 const express = require('express');
 const router = express.Router();
-const User = require('../models/user');
+
+// Lazy-load User model
+let User = null;
+const initMongoose = async () => {
+  if (!User) {
+    const mongoose = require('mongoose');
+    await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    User = require('../models/user');
+  }
+  return User;
+};
 
 router.get('/login', (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');
@@ -8,15 +19,17 @@ router.get('/login', (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email });
+    const UserModel = await initMongoose();
+    const { email, password } = req.body;
+    const user = await UserModel.findOne({ email });
     if (!user || !(await user.comparePassword(password))) {
       return res.render('login', { title: 'Login', error: 'Invalid credentials' });
     }
     req.session.user = { id: user._id, username: user.username, email: user.email };
     res.redirect('/dashboard');
-  } catch {
+  } catch (err) {
+    console.error('Login error:', err);
     res.render('login', { title: 'Login', error: 'Login failed' });
   }
 });
@@ -27,14 +40,16 @@ router.get('/register', (req, res) => {
 });
 
 router.post('/register', async (req, res) => {
-  const { username, email, password } = req.body;
   try {
-    if (await User.findOne({ $or: [{ email }, { username }] })) {
+    const UserModel = await initMongoose();
+    const { username, email, password } = req.body;
+    if (await UserModel.findOne({ $or: [{ email }, { username }] })) {
       return res.render('register', { title: 'Register', error: 'User already exists' });
     }
-    await User.create({ username, email, password });
+    await UserModel.create({ username, email, password });
     res.redirect('/login?success=Account created! Please login');
-  } catch {
+  } catch (err) {
+    console.error('Register error:', err);
     res.render('register', { title: 'Register', error: 'Registration failed' });
   }
 });
