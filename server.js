@@ -9,6 +9,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('sslmode')) {
+  process.env.DATABASE_URL += '?sslmode=require';
+}
 // MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB'))
